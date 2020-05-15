@@ -1,0 +1,124 @@
+</html>
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>高德地图DEMO</title>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.4.10&key=d8dc79a4a6ec649c81420079a45ba40f"></script>
+    <script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+    <script type="text/javascript">
+    $(document).ready(function() {
+        var map = new AMap.Map('allmap', {
+            zoom: 19,
+            center: [114.30385832, 30.64797001]
+        }); // 创建Map实例
+
+        /**
+         * 第一个参数是城市名，第二参数是小区名 
+         */
+        var showArea = function(city, area) {
+            queryHouse(area, city, "d8dc79a4a6ec649c81420079a45ba40f", function(data) {
+                console.error(data)
+                if (data.status == 1) {
+                    var houses = data.pois;
+                    if (houses && houses.length > 0) {
+                        var house = houses[0];
+                        queryHouseOutline(house.id, function(houseOutline) {
+                            console.error("get outline success");
+
+                            var pathPoints = houseOutline.data.spec.mining_shape.shape;
+                            
+                            var tmpPath = pathPoints.split(";");
+
+                            var points = [];
+                            tmpPath.forEach(function(value, index, array) {
+                                points.push(value.split(","))
+                            });
+
+                            map.clearMap();
+
+                            var ply = new AMap.Polygon({
+                                map: map,
+                                path: points,
+                                strokeColor: "#F01B2D",
+                                fillColor: "transparent"
+                            }); //建立多边形覆盖物
+
+                            map.setFitView(); //调整最佳显示
+                        });
+                    }
+                }
+            });
+        };
+
+        var queryHouseOutline = function(hid, callback) {
+            var baseURL = 'https://www.amap.com/detail/get/detail';
+            $.ajax({
+                type: "get",
+                data: {
+                    id: hid
+                },
+                url: baseURL,
+                dataType: "json",
+                success: function(datas) {
+                    callback(datas)
+                }
+            });
+        };
+
+        /**
+         * 模糊查询小区信息, 无返回值
+         * @param {} house  小区名称
+         * @param {} city   所属城市名称
+         * @param {} ak     高德地图AK
+         * @param {} callback   回调函数，该函数可以接收到请求的返回值
+         */
+        var queryHouse = function(house, city, ak, callback) {
+            var baseURL = 'http://restapi.amap.com/v3/place/text?&keywords=' + house + '&city=' + city + '&output=json&offset=20&page=1&key=' + ak;
+            callback && (window.queryHouseCallback = callback);
+            $.ajax({
+                type: "get",
+                async: false,
+                url: baseURL,
+                dataType: "jsonp",
+                jsonpCallback: "queryHouseCallback",
+                success: function(datas) {}
+            });
+        };
+
+        showArea($('#cityId').val(), $('#areaId').val());
+
+        $('#showBtn').click(function() {
+            showArea($('#cityId').val(), $('#areaId').val());
+        });
+
+        $("#areaId").keydown(function(e) {
+            if (event.keyCode == "13") {
+                showArea($('#cityId').val(), $('#areaId').val());
+            }
+        })
+    });
+    </script>
+</head>
+
+<body>
+    <table>
+        <tr>
+            <td>城市:</td>
+            <td>
+                <input id="cityId" type="text" value="武汉" />
+            </td>
+            <td>小区:</td>
+            <td>
+                <input id="areaId" type="text" value="万锦江城" />
+            </td>
+            <td>
+                <button id="showBtn">显示</button>
+            </td>
+        </tr>
+    </table>
+    <div id="allmap" style="width: 90vw; height: 90vh;"></div>
+</body>
+
+</html>
