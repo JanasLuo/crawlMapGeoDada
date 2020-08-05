@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>test6.html</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <script type="text/javascript" src="./script/jquery-1.11.1.min.js"></script>
+    <script type="text/javascript" src="./script/geo_util.js"></script>
+    <script
+      type="text/javascript"
+      src="http://api.map.baidu.com/api?v=2.0&ak=ShuBL31Vc4c1LG9pTGzuwA2qGkRSi50A"
+    ></script>
+  </head>
+
+  <body>
+    <div id="allmap" style="width: 100%; height: 400px;"></div>
+    <div class="layout">
+      <input id="value" value="" type="text" />
+      <input type="submit" onclick="dw()" value="开始" />
+    </div>
+  </body>
+  <script type="text/javascript">
+    //初始化地图
+    var value = '';
+    // const values = ['幸福人家', '万锦江城'];
+    let len = 0;
+    var map = new BMap.Map('allmap');
+    map.centerAndZoom('武汉市', 14);
+    map.enableScrollWheelZoom();
+
+    //定位区域，小地名，使用本地检索方法
+    var dw = function () {
+      value = document.getElementById('value').value;
+      var local = new BMap.LocalSearch(map, {
+        renderOptions: { map: map },
+      });
+      local.setMarkersSetCallback(function (pois) {
+        debugger;
+        //清除所有覆盖物后，在叠加第一个点
+        map.clearOverlays();
+        for (var i = 0; i < pois.length; i++) {
+          var marker = new BMap.Marker(pois[i].point);
+          // map.addOverlay(marker);
+        }
+        console.log('pois', pois);
+        //根据获取到的poi id，查询边界坐标集合，画多边形
+        if (pois.length) {
+          var uid = pois[0].uid;
+          queryUid(uid, value);
+        } else {
+          len = len - 1;
+        }
+      });
+      local.search(value);
+      map.clearOverlays();
+    };
+    //获取小区信息
+    function queryUid(uid, value) {
+      $.ajax({
+        async: false,
+        url:
+          'http://map.baidu.com/?pcevaname=pc4.1&qt=ext&ext_ver=new&l=12&uid=' +
+          uid,
+        dataType: 'jsonp',
+        jsonp: 'callback',
+        success: function (result) {
+          content = result.content;
+          if (null != content.geo && content.geo != undefined) {
+            var geo = content.geo;
+            var points = coordinateToPoints(geo);
+            console.log('points', points);
+            var wkt = points.replace(/,/g, ' ');
+            wkt = wkt.replace(/;/g, ',');
+            localStorage.setItem('wkt', wkt);
+            //point分组，得到多边形的每一个点，画多边形
+            if (points && points.indexOf(';') >= 0) {
+              points = points.split(';');
+            }
+            var arr = [];
+            for (var i = 0; i < points.length - 1; i++) {
+              var temp = points[i].split(',');
+              arr.push(
+                new BMap.Point(parseFloat(temp[0]), parseFloat(temp[1]))
+              );
+            }
+            tranformGeo(arr, value);
+            var polygon = new BMap.Polygon(arr, {
+              strokeColor: 'blue',
+              strokeWeight: 2,
+              strokeOpacity: 0.5,
+            }); //创建多边形
+            map.addOverlay(polygon); //增加多边形
+          }
+        },
+        timeout: 3000,
+      });
+    }
+
+    //获取省、市、区边界
+    function getBoundary(value) {
+      //获取边界
+      var bdary = new BMap.Boundary();
+      bdary.get(value, function (rs) {
+        //获取行政区域
+        map.clearOverlays(); //清除地图覆盖物
+        var count = rs.boundaries.length; //行政区域的点有多少个
+        for (var i = 0; i < count; i++) {
+          var ply = new BMap.Polygon(rs.boundaries[i], {
+            strokeWeight: 1,
+            strokeColor: '#ff0000',
+          }); //建立多边形覆盖物
+          map.addOverlay(ply); //添加覆盖物
+          map.setViewport(ply.getPath()); //调整视野
+        }
+      });
+    }
+    //正则表达式，满足条件后调用
+    var patter = /['省'|'市'|'区'|'县']$/;
+    var pd = function (value) {
+      // value = document.getElementById('value').value;
+      if (patter.test(value) == true) {
+        //关键字结尾是省市县区就调用下面方法
+        getBoundary(value);
+        if (/社区|小区$/.test(value) == true) {
+          //因为区后面结尾，会有小区和社区，即做了一个字方法
+          dw(value);
+        }
+      } else {
+        //关键字结尾没有省市县区结尾就调用此方法
+        dw(value);
+      }
+    };
+    function getNames() {
+      $.ajax({
+        type: 'get',
+        async: false,
+        url: 'http://127.0.0.1:8888/api/names',
+        success: function (res) {
+          console.log('res', res);
+          len = res.data.length;
+          res.data.forEach((item) => {
+            // pd(item) // 判断是否是省、市、区
+            dw(item); // 小区数据
+          });
+        },
+      });
+    }
+    // 百度坐标转wgs84
+    function tranformGeo(arr, value) {
+      const newArr = arr.map((item) =>
+        window.GeoUtil.transform(item, 'bd09ll', 'wgs84')
+      );
+      const wgs = newArr.reduce((res, item, index) => {
+        return (res += `${item.lng} ${item.lat}${
+          index === newArr.length - 1 ? '' : ','
+        }`);
+      }, '');
+      const wkt = 'POLYGON ((' + wgs + '))';
+      console.log('wkt', wkt);
+      saveWkt(value, wkt);
+    }
+    // 存储数据
+    function saveWkt(value, wkt) {
+      $.ajax({
+        type: 'post',
+        async: false,
+        url: 'http://127.0.0.1:8888/api/save',
+        dataType: 'json',
+        data: {
+          name: value,
+          wkt: wkt,
+          len: len,
+        },
+        success: function (res) {
+          console.log('res', res);
+        },
+      });
+    }
+    //坐标转换
+    function coordinateToPoints(coordinate) {
+      var points = '';
+      if (coordinate) {
+        var projection = BMAP_NORMAL_MAP.getProjection();
+
+        if (coordinate && coordinate.indexOf('-') >= 0) {
+          coordinate = coordinate.split('-');
+        }
+        //取点集合
+        var tempco = coordinate[1];
+        if (tempco && tempco.indexOf(',') >= 0) {
+          tempco = tempco.replace(';', '').split(',');
+        }
+        //分割点，两个一组，组成百度米制坐标
+        var temppoints = [];
+        for (var i = 0, len = tempco.length; i < len; i++) {
+          var obj = new Object();
+          obj.lng = tempco[i];
+          obj.lat = tempco[i + 1];
+          temppoints.push(obj);
+          i++;
+        }
+        //遍历米制坐标，转换为经纬度
+        for (var i = 0, len = temppoints.length; i < len; i++) {
+          //var pos = coordinate[i].split(',');
+          var pos = temppoints[i];
+          var point = projection.pointToLngLat(
+            new BMap.Pixel(pos.lng, pos.lat)
+          );
+          points += [point.lng, point.lat].toString() + ';';
+        }
+      }
+      return points;
+    }
+  </script>
+</html>

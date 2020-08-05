@@ -10,8 +10,9 @@
     <script type="text/javascript">
     $(document).ready(function() {
         var map = new AMap.Map('allmap', {
-            zoom: 19,
-            center: [114.30385832, 30.64797001]
+            zoom: 13,
+            // center: [114.30385832, 30.64797001] //  武汉
+            center: [113.927752, 30.926825] // 孝感
         }); // 创建Map实例
 
         /**
@@ -53,7 +54,8 @@
         };
 
         var queryHouseOutline = function(hid, callback) {
-            var baseURL = 'https://www.amap.com/detail/get/detail';
+            // var baseURL = 'https://www.amap.com/detail/get/detail';
+            var baseURL = '/detail/get/detail';
             $.ajax({
                 type: "get",
                 data: {
@@ -107,11 +109,11 @@
         <tr>
             <td>城市:</td>
             <td>
-                <input id="cityId" type="text" value="武汉" />
+                <input id="cityId" type="text" value="孝感市" />
             </td>
             <td>小区:</td>
             <td>
-                <input id="areaId" type="text" value="万锦江城" />
+                <input id="areaId" type="text" value="宇航新村" />
             </td>
             <td>
                 <button id="showBtn">显示</button>
